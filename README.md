@@ -43,7 +43,71 @@ Semasa install, anda akan ditanya:
 
 2. **Certificate Mode**
    - `Standalone` → Guna port 80 untuk issue cert  
-   - `Cloudflare` → Guna API Cloudflare (tak perlu open port 80)  
+   - `Cloudflare` → Guna API Cloudflare (tak perlu open port 80)
+
+🔹 1. Direct + Standalone (port 80)
+Fungsi:
+
+Xray terus handle TLS/SSL (tak perlu Nginx).
+
+Cert dikeluarkan guna acme.sh standalone → perlukan port 80 kosong masa issuance.
+
+Sesuai untuk server kosong (tiada web server lain).
+
+Setup paling ringkas → Xray terus listen 443.
+
+📌 Kegunaan: untuk server kecil/VPS khas VPN, tak ada website.
+
+🔹 2. Direct + Cloudflare DNS API
+Fungsi:
+
+Xray handle TLS/SSL (sama macam Direct).
+
+Cert dikeluarkan melalui Cloudflare DNS API → tak perlukan port 80.
+
+Boleh issue/renew SSL walaupun port 80 sudah dipakai atau firewall block.
+
+Lebih reliable untuk server production dengan Cloudflare DNS.
+
+📌 Kegunaan: sesuai kalau ada sekatan port 80 atau nak auto-renew cert tanpa ganggu service.
+
+🔹 3. Nginx + Standalone (port 80)
+Fungsi:
+
+Nginx handle TLS/SSL dan jadi reverse proxy.
+
+Cert dikeluarkan guna acme.sh standalone → perlukan port 80 kosong masa issuance.
+
+Xray hanya listen di localhost (127.0.0.1:10000) tanpa TLS.
+
+Sesuai kalau nak run website + VPN dalam 1 server.
+
+📌 Kegunaan: bila nak combine web server (Nginx serve web, Xray jadi backend).
+
+🔹 4. Nginx + Cloudflare DNS API
+Fungsi:
+
+Nginx handle TLS/SSL.
+
+Cert dikeluarkan melalui Cloudflare DNS API → tak perlukan port 80.
+
+Sangat stabil sebab auto-renew SSL boleh dibuat tanpa hentikan service.
+
+Xray jalan di localhost (127.0.0.1:10000).
+
+Sesuai untuk production server (website + VPN) dengan Cloudflare.
+
+📌 Kegunaan: setup paling profesional, boleh integrate website (Nginx) + VPN (Xray) + Cloudflare dengan mudah.
+
+## 🟢 Ringkasan beza 4 versi
+
+| Mode                 | TLS Handler | SSL Method           | Port 80 diperlukan? | Kegunaan                               |
+|-----------------------|-------------|----------------------|---------------------|----------------------------------------|
+| **Direct + Standalone** | Xray        | Standalone (acme.sh) | ✅ Ya               | VPS kosong, setup paling simple         |
+| **Direct + CF DNS API** | Xray        | Cloudflare API       | ❌ Tidak            | VPS dengan port 80 terhalang           |
+| **Nginx + Standalone**  | Nginx       | Standalone (acme.sh) | ✅ Ya               | Combine web + VPN dalam 1 server       |
+| **Nginx + CF DNS API**  | Nginx       | Cloudflare API       | ❌ Tidak            | Production setup: web + VPN + Cloudflare|
+
 
 ---
 
