@@ -1,71 +1,95 @@
 # Xray Vision Installer
 
-Script auto-installer untuk setup **Xray (VLESS + Vision + TLS)** di server Ubuntu (contoh: DigitalOcean, Vultr, AWS, dsb).  
-Direka khas untuk **bypass sekatan ISP**, **lindungi privasi**, dan kelihatan seperti trafik HTTPS biasa (stealth mode).
+🚀 **Xray-Vision-Installer** ialah skrip automasi penuh untuk memasang & mengurus server **Xray VLESS** dengan sokongan TLS.  
+Skrip ini membolehkan anda pilih sama ada **Direct TLS** atau **Nginx Reverse Proxy**, serta sokongan sijil **Standalone** atau **Cloudflare DNS API**.
 
 ---
 
 ## ✨ Features
-- Support dua mode install:
-  - **Standalone** (Xray + TLS)
-  - **Cloudflare CDN** (Xray + TLS + CDN)
-- Auto generate domain SSL dengan **acme.sh**
-- Konfigurasi automatik untuk **Nginx + Xray**
-- Trafik nampak macam HTTPS normal → susah dikesan (anti-DPI)
-- Sesuai untuk **Android (v2rayNG), iOS (Shadowrocket), Windows/Mac/Linux (Xray-core client)**
+
+- Pasang **Xray-core (latest release)**
+- Pilihan **Direct TLS** atau **Nginx Reverse Proxy**
+- Pilihan sijil:
+  - Standalone (port 80 terbuka)
+  - Cloudflare DNS API (tanpa gangguan port 80)
+- Auto **Let's Encrypt certificate** melalui `acme.sh`
+- Auto generate **UUID VLESS**
+- Auto generate **VLESS URI + QR Code**
+- Konfigurasi **systemd** (Xray auto start & survive reboot)
+- Fungsi **Uninstall** (bersih penuh)
 
 ---
 
-## 📦 Requirement
-- Server **Ubuntu 20.04 / 22.04 / 24.04** (tested on DigitalOcean)
-- Domain/subdomain yang point ke IP server
-- Akses root (`sudo`)
+## 📥 Cara Install
+
+Clone repo dan jalankan installer:
+
+```bash
+git clone https://github.com/racunzx/Xray-Vision-Installer.git
+cd Xray-Vision-Installer
+chmod +x xray-vision-installer.sh
+./xray-vision-installer.sh install
+```
 
 ---
 
-## 🚀 Installation
-1. Clone repo & masuk folder:
-   ```bash
-   git clone https://github.com/racunzx/Xray-Vision-Installer.git
-   cd xray-vision-installer
-   chmod +x xray-vision-installer.sh
-   ```
+## ⚙️ Pilihan Mode
 
-2. Jalankan installer:
-   ```bash
-   ./xray-vision-installer.sh
-   ```
+Semasa install, anda akan ditanya:
 
-3. Pilih mode install:
-   - Standalone  
-   - Cloudflare
+1. **Connection Mode**
+   - `Direct` → Xray terus handle TLS  
+   - `Nginx` → Guna Nginx sebagai reverse proxy  
+
+2. **Certificate Mode**
+   - `Standalone` → Guna port 80 untuk issue cert  
+   - `Cloudflare` → Guna API Cloudflare (tak perlu open port 80)  
 
 ---
 
-## 🔑 Output
-Selepas install berjaya, script akan bagi:
-- UUID user
-- Domain
-- Port (default 443)
-- Link VLESS siap untuk import ke **v2rayNG / Shadowrocket / Xray client**
+## 🔑 Output Selepas Install
+
+Selepas berjaya install, skrip akan papar:
+
+- **UUID (User ID)**
+- **Domain**
+- **VLESS URI** (boleh import ke client seperti v2rayN / v2rayNG / Clash)
+- **QR Code** (scan terus dari client)
+
+Contoh URI:
+
+```
+vless://xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx@domain.com:443?encryption=none&security=tls&type=ws&host=domain.com&path=%2F#Xray-Vision
+```
 
 ---
 
-## 📱 Client Example (Android v2rayNG)
-1. Buka app **v2rayNG**
-2. Klik `+` → `Import from clipboard`
-3. Paste link yang script bagi
-4. Connect & enjoy 🚀
+## ❌ Uninstall
+
+Untuk remove Xray & config sepenuhnya:
+
+```bash
+./xray-vision-installer.sh uninstall
+```
 
 ---
 
-## 🔒 Security
-- Auto SSL renew by **acme.sh** (default cronjob)
-- Semua trafik encrypted (TLS 1.3)
-- Vision protocol → menyamar jadi HTTPS biasa
+## 📝 Requirements
+
+- VPS / Cloud server (Ubuntu/Debian recommended)
+- Domain sudah pointing ke IP server
+- (Opsyenal) Cloudflare API key jika guna mode `Cloudflare`
 
 ---
 
-## ⚠️ Disclaimer
-Script ini untuk **pembelajaran & kegunaan peribadi sahaja**.  
-Gunakan dengan tanggungjawab masing-masing.
+## 📜 License
+
+MIT License © 2025 [racunzx](https://github.com/racunzx)
+
+---
+
+## 🙏 Credits
+
+- [Xray-core](https://github.com/XTLS/Xray-core)
+- [acme.sh](https://github.com/acmesh-official/acme.sh)
+- Builder: **racunzx**
