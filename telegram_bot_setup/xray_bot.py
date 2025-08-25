@@ -1,60 +1,49 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Telegram Bot: Xray/VLESS Manager (Inline Menu + Manual Expiry)
-Author  : racunzx
-Version : 2.0 final
+Xray/VLESS Manager Telegram Bot - Final
+Author: racunzx
+Version: 1.0 final
 """
 
-import os
-import json
-import logging
-import subprocess
+import os, json, logging, subprocess, io
 from datetime import datetime, timedelta
 from uuid import uuid4
+import qrcode
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    filters,
-    ConversationHandler,
-    ContextTypes,
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# =====================
+# ----------------------
 # Logging
-# =====================
+# ----------------------
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
-    handlers=[logging.FileHandler("bot.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler("/var/log/xray_bot.log"), logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 
-# =====================
-# Config
-# =====================
+# ----------------------
+# Config / Env
+# ----------------------
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_ID = int(os.getenv("ADMIN_USER_ID", "0"))
 CONFIG_PATH = "/etc/xray/config.json"
 
-# =====================
-# Conversation States
-# =====================
-WAIT_EXPIRY = 1
-
-# =====================
+# ----------------------
 # Helpers
-# =====================
-def is_admin(user_id: int) -> bool:
-    return user_id == ADMIN_ID
+# ----------------------
+def is_admin(uid: int) -> bool:
+    return uid == ADMIN_ID
 
 def load_config():
-    with open(CONFIG_PATH, "r") as f:
-        return json.load(f)
+    try:
+        with open(CONFIG_PATH, "r") as f:
+            return json.load(f)
+    except:
+        logger.error("Gagal load config.json")
+        return {"inbounds":[{"settings":{"clients":[]}}]}
 
 def save_config(cfg):
     with open(CONFIG_PATH, "w") as f:
@@ -63,6 +52,13 @@ def save_config(cfg):
 def restart_xray():
     subprocess.run(["systemctl", "restart", "xray"], check=False)
     logger.info("Xray service restarted.")
+
+def gen_qr(link: str) -> io.BytesIO:
+    img = qrcode.make(link)
+    bio = io.BytesIO()
+    img.save(bio, format="PNG")
+    bio.seek(0)
+    return bio
 
 def main_menu_markup() -> InlineKeyboardMarkup:
     rows = [
@@ -81,45 +77,39 @@ def main_menu_markup() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(rows)
 
-# =====================
+# ----------------------
 # Handlers
-# =====================
+# ----------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
     await update.message.reply_text("Selamat datang, Admin ✅", reply_markup=main_menu_markup())
 
-# Button handler
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if not is_admin(query.from_user.id):
         return
-    action = query.data
 
     cfg = load_config()
+    action = query.data
 
-    # --- Status ---
     if action == "status":
         uptime = subprocess.getoutput("uptime -p")
         await query.edit_message_text(f"📊 Status Server:\n{uptime}", reply_markup=main_menu_markup())
 
-    # --- List Users ---
     elif action == "list":
         users = []
-        for inbound in cfg.get("inbounds", []):
-            for c in inbound.get("settings", {}).get("clients", []):
-                exp = c.get("expiryTime","N/A")
-                users.append(f"- {c.get('email','?')} (exp: {exp})")
+        for c in cfg["inbounds"][0]["settings"]["clients"]:
+            exp = c.get("expiryTime", "N/A")
+            users.append(f"- {c.get('email','?')} (exp: {exp})")
         text = "\n".join(users) if users else "Tiada user."
         await query.edit_message_text(f"👥 Senarai User:\n{text}", reply_markup=main_menu_markup())
 
-    # --- Add User (manual expiry) ---
     elif action == "add":
-        await query.message.reply_text("Masukkan tempoh expiry untuk user baru (dalam hari):")
-        return WAIT_EXPIRY
+        await query.edit_message_text("➕ Masukkan tempoh expiry (hari) untuk user baru, contoh 1/10/120:")
+        context.user_data["awaiting_expiry"] = True
 
-    # --- Remove User ---
     elif action == "remove":
         if cfg["inbounds"][0]["settings"]["clients"]:
             removed = cfg["inbounds"][0]["settings"]["clients"].pop()
@@ -129,7 +119,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.edit_message_text("❌ Tiada user untuk dibuang.", reply_markup=main_menu_markup())
 
-    # --- Renew User ---
     elif action == "renew":
         if cfg["inbounds"][0]["settings"]["clients"]:
             user = cfg["inbounds"][0]["settings"]["clients"][-1]
@@ -140,31 +129,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.edit_message_text("❌ Tiada user untuk renew.", reply_markup=main_menu_markup())
 
-    # --- Traffic ---
     elif action == "traffic":
-        output = subprocess.getoutput("xray api statsquery --server=127.0.0.1:10085")
+        try:
+            output = subprocess.getoutput("xray api statsquery --server=127.0.0.1:10085")
+        except:
+            output = "❌ Trafik: API tidak aktif atau gagal."
         await query.edit_message_text(f"📈 Trafik User:\n{output}", reply_markup=main_menu_markup())
 
-    # --- Restart Service ---
     elif action == "restart":
         restart_xray()
         await query.edit_message_text("🔄 Xray restarted.", reply_markup=main_menu_markup())
 
-    # --- Show Logs ---
     elif action == "logs":
         logs = subprocess.getoutput("journalctl -u xray --no-pager -n 20")
-        await query.edit_message_text(f"🧾 Log Terbaru:\n{logs}", reply_markup=main_menu_markup())
+        await query.edit_message_text(f"🧾 Log Terbaru:\n{logs[-3000:]}", reply_markup=main_menu_markup())
 
-    # --- Renew Cert ---
     elif action == "renew_cert":
         out = subprocess.getoutput("certbot renew --quiet")
         await query.edit_message_text(f"🔐 Cert renewed:\n{out}", reply_markup=main_menu_markup())
 
-    # --- Config / Set ---
     elif action == "config":
-        await query.edit_message_text("⚙️ Config menu (dummy).", reply_markup=main_menu_markup())
+        await query.edit_message_text("⚙️ Config / Set menu (dummy sekarang)", reply_markup=main_menu_markup())
 
-    # --- Cleanup Expired ---
     elif action == "cleanup":
         now = datetime.now()
         before = len(cfg["inbounds"][0]["settings"]["clients"])
@@ -175,61 +161,44 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         after = len(cfg["inbounds"][0]["settings"]["clients"])
         save_config(cfg)
         restart_xray()
-        await query.edit_message_text(f"🧹 Cleanup: {before-after} user expired dibuang.", reply_markup=main_menu_markup())
+        await query.edit_message_text(f"🧹 Cleanup: {before-after} expired user dibuang.", reply_markup=main_menu_markup())
 
-    # --- Back to main ---
     elif action == "home":
         await query.edit_message_text("↩️ Kembali ke menu utama.", reply_markup=main_menu_markup())
 
-    return ConversationHandler.END
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("awaiting_expiry"):
+        try:
+            days = int(update.message.text)
+            cfg = load_config()
+            exp_date = (datetime.now() + timedelta(days=days)).isoformat()
+            new_user = {
+                "id": str(uuid4()),
+                "email": f"user{int(datetime.now().timestamp())}@bot",
+                "expiryTime": exp_date
+            }
+            cfg["inbounds"][0]["settings"]["clients"].append(new_user)
+            save_config(cfg)
+            restart_xray()
+            await update.message.reply_text(f"✅ User ditambah:\n{new_user}", reply_markup=main_menu_markup())
+            logger.info(f"User baru: {new_user}")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Gagal tambah user: {e}")
+        finally:
+            context.user_data["awaiting_expiry"] = False
 
-# --- Receive manual expiry ---
-async def receive_expiry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        days = int(update.message.text)
-    except ValueError:
-        await update.message.reply_text("Sila masukkan nombor sahaja.")
-        return WAIT_EXPIRY
-
-    cfg = load_config()
-    clients = cfg["inbounds"][0]["settings"]["clients"]
-
-    new_user = {
-        "id": str(uuid4()),
-        "email": f"user{int(datetime.now().timestamp())}@bot",
-        "expiryTime": (datetime.now() + timedelta(days=days)).isoformat()
-    }
-    clients.append(new_user)
-    save_config(cfg)
-    restart_xray()
-
-    await update.message.reply_text(
-        f"✅ User {new_user['email']} ditambah\nExpiry: {days} hari ({new_user['expiryTime']})",
-        reply_markup=main_menu_markup()
-    )
-    return ConversationHandler.END
-
-# =====================
+# ----------------------
 # Main
-# =====================
+# ----------------------
 def main():
     if not BOT_TOKEN or not ADMIN_ID:
         logger.error("BOT_TOKEN / ADMIN_ID tidak ditemui di env.")
         return
 
     app = Application.builder().token(BOT_TOKEN).build()
-
-    conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(button_handler, pattern="^add$")],
-        states={
-            WAIT_EXPIRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_expiry)],
-        },
-        fallbacks=[],
-    )
-
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
     logger.info("Bot started...")
     app.run_polling()
