@@ -26,6 +26,126 @@ Skrip ini membolehkan anda pilih antara **Direct TLS**, **Nginx Reverse Proxy**,
 
 ---
 
+# Domain & TLS Setup untuk Xray Vision Installer
+
+Panduan ini menerangkan cara sediakan domain, TLS, dan Cloudflare API untuk installer Xray Vision 6-in-1.
+
+---
+
+## 1️⃣ Dapatkan Domain
+
+Pergi ke laman pembekal domain popular seperti:
+
+- Namecheap
+- GoDaddy
+- Cloudflare Registrar
+
+1. Cari nama domain yang anda mahu, contoh: `myvpsserver.com`.
+2. Daftar dan bayar untuk memiliki domain tersebut. Harga biasanya USD 1–15 / tahun bergantung TLD (.com, .net, .xyz dll).
+
+---
+
+## 2️⃣ Dapatkan VPS dan Catat IP
+
+Sewa VPS daripada pembekal seperti:
+
+- Vultr
+- DigitalOcean
+- Linode
+- Hetzner
+- AWS Lightsail
+
+Pastikan:
+
+- VPS siap dan anda dapat IP awam, contoh: `123.45.67.89`.
+- Port 80 & 443 dibuka (firewall / security group).
+
+---
+
+## 3️⃣ Point Domain ke VPS (DNS A Record)
+
+1. Login ke panel pengurusan domain (Namecheap/GoDaddy/Cloudflare).
+2. Pergi ke **DNS Management / Zone Editor**.
+3. Buat **A Record**:
+
+| Name / Host | Value / Points to | TTL     |
+|------------|-----------------|--------|
+| @          | VPS IP (contoh: 123.45.67.89) | Default / 3600 |
+
+Untuk subdomain, contohnya `vpn.myvpsserver.com`, buat A Record baru:
+
+| Name | Value |
+|------|-------|
+| vpn  | VPS IP |
+
+Tunggu propagasi DNS (5 minit – 24 jam).
+
+---
+
+## 4️⃣ Sahkan Domain Resolve
+
+Di terminal / CMD:
+
+```bash
+ping myvpsserver.com
+```
+
+Pastikan IP yang keluar sama dengan IP VPS anda.
+
+---
+
+## 5️⃣ Nota untuk TLS
+
+- **Standalone TLS**: domain perlu resolve ke IP VPS supaya acme.sh boleh verify dan keluarkan certificate.
+- **Cloudflare TLS**: boleh guna DNS API, tak perlu port 80 terbuka, tapi perlukan `CF_Email` & `CF_Key`.
+- **Reality Mode**: jika tiada domain, gunakan mode Reality (paling stealth, TLS bypass, port 443 bebas, tiada certificate sebenar).
+
+---
+
+## Cloudflare API untuk TLS
+
+### 1️⃣ Daftar / Login Cloudflare
+
+1. Pergi ke [Cloudflare](https://www.cloudflare.com)
+2. Daftar akaun atau login.
+3. Tambah domain ke Cloudflare (ikut wizard **Add a Site**).
+4. Tukar **nameserver** di registrar supaya domain diuruskan Cloudflare.
+
+### 2️⃣ Cari Global API Key
+
+1. Klik **My Profile** (ikon user di kanan atas).
+2. Pergi ke **API Tokens**.
+3. Di bahagian **Global API Key**, klik **View**.
+4. Masukkan kata laluan Cloudflare untuk sahkan.
+5. Copy key → ini adalah `CF_Key`.
+
+### 3️⃣ Dapatkan Email Cloudflare
+
+Email yang digunakan akaun Cloudflare adalah `CF_Email`.  
+Contoh: `user@mail.com`.
+
+### 4️⃣ Simpan CF_Email & CF_Key di environment variable
+
+Di terminal VPS:
+
+```bash
+export CF_Email="user@mail.com"
+export CF_Key="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+Pastikan variable ini aktif sebelum jalankan installer.
+
+### 5️⃣ Gunakan dalam Xray Installer
+
+Pilih mode:
+
+- Direct + Cloudflare  
+- Nginx + Cloudflare  
+
+Installer akan gunakan `CF_Email` & `CF_Key` untuk issue TLS certificate tanpa port 80 terbuka.
+
+---
+
 ## 📥 Cara Install
 
 Clone repo dan jalankan installer:
